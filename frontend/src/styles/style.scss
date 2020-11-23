@@ -1,0 +1,147 @@
+.home-bg {
+    background-image: url("../assets/home.jpg");
+    background-position: center center;
+    background-repeat: no-repeat;
+    background-attachment: relative;
+    background-size: cover;
+    background-color: #999;
+}
+
+#transfer-nav {
+    min-width: 80%!important;
+    padding-top: 50px;
+    padding-bottom: 50px;
+}
+#transfer-body {
+    .field {
+        min-width: 80%!important;
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+        .has-icons-left {
+            flex-grow: 1;
+        }
+    }
+}
+.index-input{
+    max-width: 50%!important;
+}
+
+.signup-input{
+    max-width: 50%!important;
+}
+
+.signin-input{
+    max-width: 30%!important;
+}
+
+.is-pastelBlue {
+    background-color: #B6DFDD!important;
+}
+
+.is-pastelOrange {
+    background-color: #FFC784!important;
+}
+
+.is-pastelGreen {
+    background-color: #A7E99C!important;
+}
+
+.is-pastelYellow {
+    background-color: #FFEEA5!important;
+}
+
+.is-pastelPink {
+    background-color: #FEC8D8!important;
+}
+
+.mb-20 {
+    margin-bottom: 20px!important;
+}
+
+.ml-20 {
+    margin-left: 20px!important;
+}
+
+
+.index-column {
+    display: flex!important;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.index-row {
+    display: flex!important;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.main-flex {
+    display: flex!important;
+    align-items: flex-end!important;
+}
+
+.account-flex {
+    display: flex!important;
+    align-items: center!important;
+}
+.account {
+    padding: 0 50px 20px 50px;
+    .flex {
+        margin-top: 10px;
+        margin-bottom: 10px;
+        display: flex!important;
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+    }
+}
+
+@import "../../node_modules/bulma/bulma.sass";
+
+.href {
+    color: $dark;
+    &:hover{
+        font-weight: 500;
+    }
+}
+
+.history-container{
+    display: flex!important;
+    flex-direction: column!important;
+    justify-content: center;
+}
+
+.history-card {
+    margin: 20px 30px 20px 30px;
+    width: 75vw!important;
+    p {
+        margin-top: 4px!important;
+        margin-bottom: 4px!important;
+        font-size: 20px;
+    }
+}
+
+.hover-box{
+    width: 70vw;
+    height: 1rem;
+    background-color: white;
+    flex-direction: coloumn;
+    position: absolute!important;
+    &:hover .show {
+        display: inline;
+    }
+    &:hover .ok {
+        display:none;
+    }
+    .show{
+        display: none;
+        transition: all 2s ease;
+        vertical-align: middle;
+    }
+}
+
+
+

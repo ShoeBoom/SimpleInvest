@@ -12,7 +12,8 @@ import axios from 'axios';
 const Chart = ({uid,width, height}) => {
     const [data, setData] = useState([])
     useEffect(() => {
-        axios.post('/api/networthHistory', { uid }).then( (res) => {
+        axios.get(`/api/networthHistory?uid=${uid}`).then( (res) => {
+            console.log(res)
             let r = []
             let i = 0;
             res.data.slice().reverse().forEach(data => {
@@ -22,6 +23,9 @@ const Chart = ({uid,width, height}) => {
                 })
                 i++;
             })
+            r.at(-2).index = "1 day ago"
+            r.at(-1).index = "Today"
+
             setData(r)
         }) 
     }, []);

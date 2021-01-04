@@ -28,19 +28,25 @@ function generateCashStockRatio(age, retirementAge, monthlyBudget, netWorth) {
     }
 }
 
-function getStockPrice(stockSymbol){
-    // const response = axios.get(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${stockSymbol}&apikey=${STOCK_API_KEY}`);
+async function getStockPrice(stockSymbol){
+    const res = await axios.get(`http://api.marketstack.com/v1/eod?access_key=${STOCK_API_KEY}&symbols=${stockSymbol}&date_from=${new Date(Date.now() - 864e5).toISOString().replace(/T.*/,'')}`);
 
-    // console.log(`Price of ${stockSymbol} : ${response.data["Global Quote"]["05. price"]}`)
-    // // TODO: implement handeling for when the api rate limit is reached
-    // return parseFloat(response.data["Global Quote"]["05. price"])
-
-    if (stockSymbol == "GOVT"){
-        return 27.77;
-    }else {
-        return 355.33;
-    }
+    const data = res.data.data
+    console.log(`Price of ${stockSymbol} : ${data[data.length -1].close}`)
+    return parseFloat(data[data.length -1].close)
 }
+
+exports.getStockPrice = getStockPrice;
+
+async function getStockPrice5DaysAgo(stockSymbol){
+    const res = await axios.get(`http://api.marketstack.com/v1/eod?access_key=${STOCK_API_KEY}&symbols=${stockSymbol}&date_from=${new Date(Date.now() - 864e5 * 6).toISOString().replace(/T.*/,'')}`);
+
+    const data = res.data.data
+    console.log(`Price of ${stockSymbol} : ${data[data.length -1].close}`)
+    return data.map(v=> parseFloat(v.close)).reverse()
+}
+
+exports.getStockPrice5DaysAgo = getStockPrice5DaysAgo;
 
 exports.generateStockPortfolio = async (age, retirementAge, monthlyBudget, netWorth) => {
     const ratio = generateCashStockRatio(age, retirementAge, monthlyBudget, netWorth);
@@ -66,22 +72,14 @@ exports.generateStockPortfolio = async (age, retirementAge, monthlyBudget, netWo
 }
 
 exports.getCurrentNetWorth = async (uid) => {
-    /*const [fbres, spyprice, govtprice]= await Promise.all([
+    const [fbres, spyprice, govtprice]= await Promise.all([
         firestore.collection("portfolio").doc(uid).get(),
         getStockPrice("SPY"),
         getStockPrice("GOVT")
     ])
 
     const data = fbres.data();
-    return (data.SPY * spyprice) + (data.GOVT * govtprice) + data.cash;*/
-    const [fbres]= await Promise.all([
-        firestore.collection("portfolio").doc(uid).get()
-    ])
-
-    const data = fbres.data();
-    return (data.SPY * 355.33) + (data.GOVT * 27.77) + data.cash;
-    //find price of SPY and GOVT everyday
-
+    return (data.SPY * spyprice) + (data.GOVT * govtprice) + data.cash;
 }
 
 exports.rebalancePortfolio = async (uid, newNetworth) => {
@@ -99,4 +97,11 @@ exports.rebalancePortfolio = async (uid, newNetworth) => {
 		cash: portfolio.cash,
 		lastRebalanced: admin.firestore.FieldValue.serverTimestamp()
 	})
+
+    await firestore.collection("portfolio").doc(uid).collection("history").add({
+        SPY: portfolio.SPY,
+        GOVT: portfolio.GOVT,
+        cash: portfolio.cash,
+        lastRebalanced: admin.firestore.FieldValue.serverTimestamp()
+    })
 }

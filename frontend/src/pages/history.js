@@ -22,7 +22,7 @@ class History extends Component {
       if (user) {
         let uid = user.uid;
         axios
-          .post(`/api/history`, { uid: uid })
+          .get(`/api/history`, {params: { uid: uid }})
           .then((res) => {
             let data = res.data;
             currentComponent.setState({ Data: res.data });

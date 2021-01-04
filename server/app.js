@@ -3,44 +3,15 @@ const path = require('path');
 var cors = require('cors');
 const bodyParser = require('body-parser').json()
 const { admin, firestore, auth } = require("./firebase")
-const { generateStockPortfolio, getCurrentNetWorth, rebalancePortfolio } = require("./caclulator")
+const { generateStockPortfolio, getCurrentNetWorth, rebalancePortfolio, getStockPrice, getStockPrice5DaysAgo } = require("./caclulator")
 const {addTransaction} = require("./serverUtils")
 // 
 const cron = require('node-cron');
 
 const app = express();
 
-// cron.schedule('0 0 16 * * 1-5', async  () => {
-// 	let users = await firestore.collection("userData").get();
-// 	let prom = []
-// 	users.forEach( async (data) => {
-// 		const uid = data.data().uid
-// 		const networth = await getCurrentNetWorth(uid)
-// 		prom.push(firestore.collection("dataovertime").add({
-// 			uid: uid,
-// 			price: networth,
-// 			timestamp: admin.firestore.FieldValue.serverTimestamp()
-// 		}))
-// 	})
+app.use(express.static(path.join(__dirname, '/../frontend/build')));
 
-// 	await Promise.all(prom);
-// }, {
-// 	scheduled: true,
-// 	timezone: "America/New_York"
-// });
-
-app.use(cors());
-// call this after user does the quiz
-// sets user data
-// request example: 
-// {
-//     uid: /* user id from client  */,
-//     age: /* user age */,
-//     retirementAge: /* user retirement Age */,
-//     monthlyBudget: /* user monthly Budget */,
-//     monthlyIncome: /* user monthly Income */,
-//     initialDeposit: /* user net Worth */,
-// }
 app.post("/api/initUser", bodyParser, async (req, res) => {
 	const uid = req.body.array.uid; 
 
@@ -65,13 +36,20 @@ app.post("/api/initUser", bodyParser, async (req, res) => {
 	
 
 	const portfolio = await generateStockPortfolio(age, retirementAge, monthlyBudget, netWorth);
-	console.log(portfolio)
+
 	const setPortfolio = firestore.collection("portfolio").doc(uid).set({
 		SPY: portfolio.SPY,
 		GOVT: portfolio.GOVT,
 		cash: portfolio.cash,
 		lastRebalanced: admin.firestore.FieldValue.serverTimestamp()
 	})
+
+	await firestore.collection("portfolio").doc(uid).collection("history").add({
+        SPY: portfolio.SPY,
+        GOVT: portfolio.GOVT,
+        cash: portfolio.cash,
+        lastRebalanced: admin.firestore.FieldValue.serverTimestamp()
+    })
 
 	const setTransaction =  addTransaction(uid, netWorth)
 
@@ -81,31 +59,61 @@ app.post("/api/initUser", bodyParser, async (req, res) => {
 	})
 })
 
-// {
-// 		uid: user id
-// }
-app.post("/api/networth", bodyParser, async (req, res) => {
-	const uid = req.body.uid;
-	const netWorth = await getCurrentNetWorth(uid);
-	res.send({
-		networth: netWorth
-	})
-})
+app.get("/api/networthHistory", async (req, res) => {
+	const uid = req.query.uid;
 
-app.post("/api/networthHistory", bodyParser, async (req, res) => {
-	const uid = req.body.uid;
-	console.log(req.body);
 	
 	const netWorth = await getCurrentNetWorth(uid);
-	const data = await firestore.collection("dataovertime").where("uid", "==", uid).limit(4).orderBy('timestamp','desc').get();
+	const lastDate = new Date(Date.now() - 864e5*6);
+	lastDate.setHours(0,0,0,0);
+	const data = await firestore.collection("portfolio").doc(uid)
+					.collection("history")
+					.where("lastRebalanced", ">", lastDate)
+					.orderBy("lastRebalanced", "desc")
+					.get()
+					.then(snapshot => snapshot.docs.map(doc => doc.data()));
 
-	let return_res = [{price: netWorth}]
+	const start_data = await firestore.collection("portfolio").doc(uid)
+					.collection("history")
+					.where("lastRebalanced", "<", lastDate)
+					.orderBy("lastRebalanced", "desc")
+					.limit(1)
+					.get()
+					.then(snapshot => snapshot.docs.map(doc => doc.data()));
+	
 
-	data.forEach( data => {
-		return_res.push(data.data())
+	data.push(start_data[0]);
+
+	const [prices_spy, prices_govt] = await Promise.all([
+		getStockPrice5DaysAgo("SPY"),
+		getStockPrice5DaysAgo("GOVT")
+	])
+	console.log(prices_spy)
+
+	let return_res = []
+	prices_spy.forEach( (price_spy, i) => {
+		const price_govt = prices_govt[i];
+		const date = new Date(Date.now() - 864e5*i)
+		date.setHours(0,0,0,0)
+
+		const last_valid_portfolio = data.reverse().find(v => v.lastRebalanced <= date);
+
+		if(last_valid_portfolio) {
+			return_res.push({
+				price: last_valid_portfolio.SPY * price_spy + last_valid_portfolio.GOVT * price_govt + last_valid_portfolio.cash,
+				date: date
+			});
+		} else {
+			return_res.push({
+				price: 0,
+				date: date
+			});
+		}
 	})
+	return_res.push({price: netWorth})
+	
 
-	res.send(return_res)
+	res.send(return_res.reverse())
 })
 
 
@@ -115,7 +123,6 @@ app.post("/api/networthHistory", bodyParser, async (req, res) => {
 // 		amount: amount dpo
 // }
 app.post("/api/deposit", bodyParser, async (req, res) => {
-	console.log(req.body.amount)
 	const uid = req.body.uid;
 	const amount = parseFloat(req.body.amount)
 	const setUserData = firestore.collection("userData").doc(uid).update({totalDeposits: admin.firestore.FieldValue.increment(amount)})
@@ -154,54 +161,52 @@ app.post("/api/withdraw", bodyParser, async (req, res) => {
 // {
 // 		uid: user id
 // }
-app.get("/api/netDeposits", bodyParser, async (req, res) => {
-	const uid = req.body.uid;
-
-	const UserData = (await firestore.collection("userData").doc(uid).get()).data()
+app.get("/api/portfolio", async (req, res) => {
+	const uid = req.query.uid;
+	const [portfolio, spyprice, govtprice]= await Promise.all([
+        firestore.collection("portfolio").doc(uid).get().then(res => res.data()),
+        getStockPrice("SPY"),
+        getStockPrice("GOVT")
+    ])
 	
-	res.send({
-		netDeposits: UserData.totalDeposits
-	})
-})
-
-// {
-// 		uid: user id
-// }
-app.post("/api/portfolio", bodyParser, async (req, res) => {
-	const uid = req.body.uid;
-	const portfolio =  (await firestore.collection("portfolio").doc(uid).get()).data()
 	let data = {
-		SPY: Math.round(((portfolio.SPY * 355.33) + Number.EPSILON) * 100) / 100,
-		GOVT: Math.round(((portfolio.GOVT * 27.77) + Number.EPSILON) * 100) / 100,
+		SPY: Math.round(((portfolio.SPY * spyprice) + Number.EPSILON) * 100) / 100,
+		GOVT: Math.round(((portfolio.GOVT * govtprice) + Number.EPSILON) * 100) / 100,
 		cash: Math.round((portfolio.cash + Number.EPSILON) * 100) / 100,
 		lastRebalanced: portfolio.lastRebalanced
 	}
 	res.send(data);
 })
 
-app.post("/api/portfolioHoldings", bodyParser, async (req, res) => {
-	const uid = req.body.uid;
+app.get("/api/portfolioHoldings", async (req, res) => {
+	const uid = req.query.uid;
 	const portfolio =  (await firestore.collection("portfolio").doc(uid).get()).data()
 	let data = {
 		SPY: portfolio.SPY,
-		GOVT: portfolio.GOVT
+		GOVT: portfolio.GOVT,
+		cash: portfolio.cash
 	}
 	res.send(data);
 })
 
-
 // {
 // 		uid: user id
 // }
-app.post("/api/history", bodyParser, async (req, res) => {
-	const uid = req.body.uid;
+app.get("/api/history", async (req, res) => {
+	const uid = req.query.uid;
 	let history = [];
 	const data = await firestore.collection("transactions").where("uid", "==", uid).limit(10).orderBy('date','desc').get();
-	console.log(data.empty)
+
 	data.forEach(data => {
 		history.push(data.data())
 	})
 	res.send(history);
+})
+
+app.get("/api/rebalance", async (req, res) => {
+	const netWorth = (await getCurrentNetWorth(req.query.uid))
+	await rebalancePortfolio(req.query.uid, netWorth);
+	res.send("Success");
 })
 
 app.get('*', (req,res) =>{

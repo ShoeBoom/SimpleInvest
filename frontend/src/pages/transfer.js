@@ -60,7 +60,7 @@ class Transfer extends Component {
         firebase.auth().onAuthStateChanged(function(user) {
             if (user) {
                 let uid = firebase.auth().currentUser.uid;
-                axios.post('/api/portfolio', {uid})
+                axios.get('/api/portfolio', {params: { uid }})
                 .then((res) => {
                     let total = res.data.GOVT + res.data.cash + res.data.SPY;
                     currentComponent.setState({amount: total});

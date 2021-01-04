@@ -41,13 +41,12 @@ class Main extends Component {
         firebase.auth().onAuthStateChanged(function (user) {
             if (user) {
                 let uid = firebase.auth().currentUser.uid;
-                axios.post('/api/portfolio', { uid })
+                axios.get('/api/portfolio', {params: { uid }})
                     .then((res) => {
                         currentComponent.setState({ amount: res.data });
                     });
-                axios.post('/api/networthHistory', { uid })
+                axios.get(`/api/networthHistory?uid=${uid}`)
                     .then((res) => {
-                        console.log(res.data);
                         let oldestPrice = res.data[res.data.length - 1].price;
                         let newestPrice = res.data[0].price
                         let price = ((newestPrice - oldestPrice)/oldestPrice)*100;
@@ -144,7 +143,7 @@ class HoverBox extends Component {
         firebase.auth().onAuthStateChanged(function (user) {
             if (user) {
                 let uid = firebase.auth().currentUser.uid;
-                axios.post('/api/portfolioHoldings', { uid })
+                axios.get('/api/portfolioHoldings', {params: { uid }})
                     .then((res) => {
                         currentComponent.setState(res.data);
                     });
